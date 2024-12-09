@@ -31,12 +31,7 @@ Route::group([
 //get different resource
 Route::group([
     'middleware'=>'api',
-    'prefix'=>'product'
+    'prefix'=>'hackathon'
 ], function($router){
-    Route::get('/all',[ProductController::class,'index']);
-    Route::get('/single/{id}',[ProductController::class,'show']);
-    // Route::get('/categorie-all',[CategorieController::class,'index']);
-    Route::post('/store-product',[ProductController::class,'store']);
-    Route::put('/{id}',[ProductController::class,'update']);
-    Route::post('/{id}',[ProductController::class,'destroy']);
+    Route::get('',function(){return response()->json("API run well");});
 });
