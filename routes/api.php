@@ -31,7 +31,7 @@ Route::group([
 //get different resource
 Route::group([
     'middleware'=>'api',
-    'prefix'=>'product'
+    'prefix'=>'hackathon'
 ], function($router){
-    
+    Route::get('',function(){return response()->json("API run well");});
 });
