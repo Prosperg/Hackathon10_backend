@@ -33,10 +33,5 @@ Route::group([
     'middleware'=>'api',
     'prefix'=>'product'
 ], function($router){
-    Route::get('/all',[ProductController::class,'index']);
-    Route::get('/single/{id}',[ProductController::class,'show']);
-    // Route::get('/categorie-all',[CategorieController::class,'index']);
-    Route::post('/store-product',[ProductController::class,'store']);
-    Route::put('/{id}',[ProductController::class,'update']);
-    Route::post('/{id}',[ProductController::class,'destroy']);
+    
 });
