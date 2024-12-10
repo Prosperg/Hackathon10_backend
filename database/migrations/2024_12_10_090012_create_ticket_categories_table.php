@@ -14,7 +14,7 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->decimal('price', 10, 2);
             $table->integer('duration_hours')->default(24); // Durée de validité en heures
-            $table->string('signature', 10)->unique(); // Signature unique pour la catégorie
+            $table->string('signature', 3)->unique(); // Signature unique de 3 caractères
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
