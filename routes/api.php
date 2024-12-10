@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\API\TicketCategoryController;
 use App\Http\Controllers\API\MotorcycleController;
+use App\Http\Controllers\API\TicketController;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,20 +37,19 @@ Route::group([
     'middleware'=>'api',
     'prefix'=>'hackathon'
 ], function($router){
-    Route::get('',function(){return response()->json("API run well");});
-});
+    Route::post('', [TicketController::class,'sendSms']);});
+
+// Route::group([
+//     'middleware'=>'api',
+//     'prefix'=>'ticket-category'
+// ],function($router){
+//     Route::get('/', [TicketCategoryController::class,'getTicketCategory']);
+//     Route::post('/store', [TicketCategoryController::class,'store']);
+//     Route::patch('/update', [TicketCategoryController::class,'update']);
+// });
 
 Route::group([
-    'middleware'=>'api',
-    'prefix'=>'ticket-category'
-],function($router){
-    Route::get('/', [TicketCategoryController::class,'getTicketCategory']);
-    Route::post('/store', [TicketCategoryController::class,'store']);
-    Route::patch('/update', [TicketCategoryController::class,'update']);
-});
-
-Route::group([
-    'middleware' => 'api',
+    
     'prfix'=>''
 ],function ($router) {
     // Liste et enregistrement des motos
@@ -63,4 +63,16 @@ Route::group([
     
     // Recherche
     Route::post('motorcycles/search', [MotorcycleController::class, 'search']);
+});
+
+// Routes pour les catégories de tickets
+Route::prefix('ticket-categories')->group(function () {
+    Route::get('/', [TicketCategoryController::class, 'index']);
+    Route::get('/active', [TicketCategoryController::class, 'getActiveCategories']);
+    Route::get('/statistics', [TicketCategoryController::class, 'statistics']);
+    Route::get('/{id}', [TicketCategoryController::class, 'show']);
+    Route::post('/', [TicketCategoryController::class, 'store']);
+    Route::put('/{id}', [TicketCategoryController::class, 'update']);
+    Route::delete('/{id}', [TicketCategoryController::class, 'destroy']);
+    Route::patch('/{id}/toggle-active', [TicketCategoryController::class, 'toggleActive']);
 });

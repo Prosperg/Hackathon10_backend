@@ -3,10 +3,16 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Services\TwilioService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class TicketController extends Controller
 {
+    protected $sms;
+    public function __construct(TwilioService $twilioService) {
+        $this->sms = $twilioService;
+    }
     /**
      * Display a listing of the resource.
      *
@@ -25,7 +31,7 @@ class TicketController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        
     }
 
     /**
@@ -60,5 +66,15 @@ class TicketController extends Controller
     public function destroy($id)
     {
         //
+    }
+
+    public function sendSms(Request $request)
+    {
+        try {
+            $code = Str::random(6);
+            $this->sms->sendSMS($request->to,$code);
+        } catch (\Throwable $th) {
+            return response()->json($th->getMessage());
+        }
     }
 }
