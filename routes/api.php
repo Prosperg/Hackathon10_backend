@@ -33,7 +33,7 @@ Route::get('verify-ticket/{code}', [MotorcycleController::class, 'verifyTicket']
 
 // Routes protégées pour la gestion des motos
 Route::group([
-    'middleware' => ['api', 'jwt.auth'],
+    // 'middleware' => ['api', 'jwt.auth'],
 ], function ($router) {
     // Liste et enregistrement des motos
     Route::get('motorcycles', [MotorcycleController::class, 'index']);
@@ -58,4 +58,28 @@ Route::prefix('ticket-categories')->group(function () {
     Route::put('/{id}', [TicketCategoryController::class, 'update']);
     Route::delete('/{id}', [TicketCategoryController::class, 'destroy']);
     Route::patch('/{id}/toggle-active', [TicketCategoryController::class, 'toggleActive']);
+});
+
+// Route de test pour SMS
+Route::post('/test-sms', function(Request $request) {
+    $smsService = app(App\Services\SmsService::class);
+    
+    $request->validate([
+        'phone_number' => 'required|string'
+    ]);
+
+    $testData = [
+        'ticket_code' => 'TEST-12345',
+        'category' => 'Demi-journée',
+        'price' => 300,
+        'duration' => 12,
+        'plate_number' => 'TEST-123'
+    ];
+
+    $result = $smsService->sendTicketConfirmation($request->phone_number, $testData);
+
+    return response()->json([
+        'message' => 'Test SMS',
+        'result' => $result
+    ]);
 });

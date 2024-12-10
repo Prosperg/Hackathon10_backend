@@ -4,13 +4,149 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Motorcycle;
-use App\Models\TicketCategory;
+use App\Models\MotorcycleHistory;
+use App\Services\SmsService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Carbon\Carbon;
 
 class MotorcycleController extends Controller
 {
+    protected $smsService;
+
+    public function __construct(SmsService $smsService)
+    {
+        $this->smsService = $smsService;
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'phone_number' => 'required|string',
+            'motorcycle_number' => 'required|string',
+            'photo_path' => 'required|string',
+            'ticket_category_id' => 'required|exists:ticket_categories,id'
+        ]);
+
+        // Créer la moto
+        $motorcycle = Motorcycle::create([
+            'phone_number' => $request->phone_number,
+            'motorcycle_number' => $request->motorcycle_number,
+            'photo_path' => $request->photo_path,
+            'user_id' => Auth::id(),
+            'ticket_category_id' => $request->ticket_category_id,
+            'entry_time' => now(),
+            'status' => 'in_custody'
+        ]);
+
+        // Générer le code du ticket
+        $motorcycle->generateTicketCode();
+
+        // Générer le QR code
+        $motorcycle->generateQRCode();
+
+        // Créer l'historique
+        MotorcycleHistory::create([
+            'motorcycle_id' => $motorcycle->id,
+            'user_id' => Auth::id(),
+            'action' => 'check_in',
+            'action_time' => now()
+        ]);
+
+        // Envoyer le SMS de confirmation
+        $ticketData = [
+            'ticket_code' => $motorcycle->ticket_code,
+            'category' => $motorcycle->category->name,
+            'price' => $motorcycle->category->price,
+            'duration' => $motorcycle->category->duration_hours,
+            'plate_number' => $motorcycle->motorcycle_number
+        ];
+        
+        $this->smsService->sendTicketConfirmation(
+            $motorcycle->phone_number,
+            $ticketData
+        );
+
+        return response()->json([
+            'message' => 'Moto enregistrée avec succès',
+            'motorcycle' => $motorcycle
+        ], 201);
+    }
+
+    public function markAsPaid($id)
+    {
+        $motorcycle = Motorcycle::findOrFail($id);
+        
+        if ($motorcycle->payment_status) {
+            return response()->json([
+                'message' => 'Le ticket a déjà été payé'
+            ], 400);
+        }
+
+        $motorcycle->payment_status = true;
+        $motorcycle->save();
+
+        // Créer l'historique
+        MotorcycleHistory::create([
+            'motorcycle_id' => $motorcycle->id,
+            'user_id' => Auth::id(),
+            'action' => 'payment',
+            'action_time' => now()
+        ]);
+
+        // Envoyer le SMS de confirmation de paiement
+        $paymentData = [
+            'amount' => $motorcycle->category->price,
+            'ticket_code' => $motorcycle->ticket_code,
+            'date' => now()->format('d/m/Y H:i')
+        ];
+
+        $this->smsService->sendPaymentConfirmation(
+            $motorcycle->phone_number,
+            $paymentData
+        );
+
+        return response()->json([
+            'message' => 'Paiement enregistré avec succès',
+            'motorcycle' => $motorcycle
+        ]);
+    }
+
+    public function return($id)
+    {
+        $motorcycle = Motorcycle::findOrFail($id);
+
+        if ($motorcycle->status === 'returned') {
+            return response()->json([
+                'message' => 'Cette moto a déjà été restituée'
+            ], 400);
+        }
+
+        if (!$motorcycle->payment_status) {
+            return response()->json([
+                'message' => 'Le paiement doit être effectué avant la restitution'
+            ], 400);
+        }
+
+        $motorcycle->status = 'returned';
+        $motorcycle->return_time = now();
+        $motorcycle->save();
+
+        // Créer l'historique
+        MotorcycleHistory::create([
+            'motorcycle_id' => $motorcycle->id,
+            'user_id' => Auth::id(),
+            'action' => 'return',
+            'action_time' => now()
+        ]);
+
+        return response()->json([
+            'message' => 'Moto restituée avec succès',
+            'motorcycle' => $motorcycle
+        ]);
+    }
+
     public function index()
     {
         $motorcycles = Motorcycle::with(['user', 'ticketCategory'])
@@ -25,116 +161,11 @@ class MotorcycleController extends Controller
         return response()->json($motorcycles);
     }
 
-    public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'phone_number' => 'required|string|max:20',
-            'motorcycle_number' => 'required|string|max:50',
-            'photo' => 'required|image|max:2048', // 2MB max
-            'ticket_category_id' => 'required|exists:ticket_categories,id',
-            'notes' => 'nullable|string'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        // Vérifier si la catégorie est active
-        $category = TicketCategory::findOrFail($request->ticket_category_id);
-        if (!$category->is_active) {
-            return response()->json(['error' => 'Cette catégorie de ticket n\'est pas disponible'], 400);
-        }
-
-        // Enregistrer la photo
-        $photoPath = $request->file('photo')->store('motorcycles', 'public');
-
-        // Créer l'enregistrement
-        $motorcycle = Motorcycle::create([
-            'phone_number' => $request->phone_number,
-            'motorcycle_number' => $request->motorcycle_number,
-            'photo_path' => $photoPath,
-            'ticket_category_id' => $request->ticket_category_id,
-            'user_id' => auth()->id(),
-            'entry_time' => now(),
-            'notes' => $request->notes
-        ]);
-
-        // Générer le ticket et le QR code
-        $ticketData = $motorcycle->generateTicket();
-
-        // Créer l'historique
-        $motorcycle->history()->create([
-            'user_id' => auth()->id(),
-            'action' => 'check_in',
-            'action_time' => now(),
-            'notes' => 'Enregistrement initial',
-            'metadata' => [
-                'ticket_code' => $motorcycle->ticket_code,
-                'category' => $category->name,
-                'price' => $category->price
-            ]
-        ]);
-
-        return response()->json([
-            'message' => 'Moto enregistrée avec succès',
-            'motorcycle' => $motorcycle,
-            'ticket' => $ticketData,
-            'photo_url' => Storage::url($photoPath)
-        ], 201);
-    }
-
     public function show($id)
     {
         $motorcycle = Motorcycle::with(['user', 'ticketCategory', 'history'])->findOrFail($id);
         $motorcycle->qr_code_content = $motorcycle->getQRCodeContent();
         return response()->json($motorcycle);
-    }
-
-    public function markAsPaid($id)
-    {
-        $motorcycle = Motorcycle::findOrFail($id);
-        
-        if ($motorcycle->payment_status) {
-            return response()->json(['message' => 'Le paiement a déjà été effectué'], 400);
-        }
-
-        $motorcycle->markAsPaid();
-
-        return response()->json([
-            'message' => 'Paiement enregistré avec succès',
-            'motorcycle' => $motorcycle,
-            'qr_code_url' => $motorcycle->getQRCodeUrl(),
-            'qr_code_content' => $motorcycle->getQRCodeContent()
-        ]);
-    }
-
-    public function return($id)
-    {
-        $motorcycle = Motorcycle::findOrFail($id);
-        
-        if ($motorcycle->status === 'returned') {
-            return response()->json(['message' => 'Cette moto a déjà été restituée'], 400);
-        }
-
-        if (!$motorcycle->payment_status) {
-            return response()->json(['message' => 'Le paiement doit être effectué avant la restitution'], 400);
-        }
-
-        $motorcycle->status = 'returned';
-        $motorcycle->return_time = now();
-        $motorcycle->save();
-
-        $motorcycle->history()->create([
-            'user_id' => auth()->id(),
-            'action' => 'return',
-            'action_time' => now(),
-            'notes' => 'Moto restituée'
-        ]);
-
-        return response()->json([
-            'message' => 'Moto restituée avec succès',
-            'motorcycle' => $motorcycle
-        ]);
     }
 
     public function search(Request $request)
