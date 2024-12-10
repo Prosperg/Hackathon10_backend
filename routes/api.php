@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Ressources\ProductController;
 use App\Http\Controllers\Ressources\CategorieController;
-
+use App\Http\Controllers\API\TicketCategoryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,4 +34,13 @@ Route::group([
     'prefix'=>'hackathon'
 ], function($router){
     Route::get('',function(){return response()->json("API run well");});
+});
+
+Route::group([
+    'middleware'=>'api',
+    'prefix'=>'ticket-category'
+],function($router){
+    Route::get('/', [TicketCategoryController::class,'getTicketCategory']);
+    Route::post('/store', [TicketCategoryController::class,'store']);
+    Route::patch('/update', [TicketCategoryController::class,'update']);
 });

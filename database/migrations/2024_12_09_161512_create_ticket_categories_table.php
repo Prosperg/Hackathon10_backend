@@ -16,7 +16,8 @@ class CreateTicketCategoriesTable extends Migration
         Schema::create('ticket_categories', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
-            $table->integer('space_saving');
+            $table->integer('price');
+            $table->string('signing')->unique();
             $table->text('description')->nullable();
             $table->timestamps();
         });
