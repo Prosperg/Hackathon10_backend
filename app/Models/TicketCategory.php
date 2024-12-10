@@ -9,6 +9,19 @@ use Illuminate\Support\Str;
 class TicketCategory extends Model
 {
     use HasFactory;
-    protected $fillable = ["name","price","signing","description"];
+    protected $fillable = [
+        'name',
+        'description', 
+        'price',
+        'duration_hours',
+        'signature',
+        'is_active'
+    ];
+
+    protected $casts = [
+        'price' => 'decimal:2',
+        'duration_hours' => 'integer',
+        'is_active' => 'boolean'
+    ];
 
 }

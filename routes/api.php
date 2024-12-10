@@ -3,6 +3,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\API\MotorcycleController;
+use App\Http\Controllers\API\TicketCategoryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,4 +46,16 @@ Route::group([
     
     // Recherche
     Route::post('motorcycles/search', [MotorcycleController::class, 'search']);
+});
+
+// Routes pour les catégories de tickets
+Route::prefix('ticket-categories')->group(function () {
+    Route::get('/', [TicketCategoryController::class, 'index']);
+    Route::get('/active', [TicketCategoryController::class, 'getActiveCategories']);
+    Route::get('/statistics', [TicketCategoryController::class, 'statistics']);
+    Route::get('/{id}', [TicketCategoryController::class, 'show']);
+    Route::post('/', [TicketCategoryController::class, 'store']);
+    Route::put('/{id}', [TicketCategoryController::class, 'update']);
+    Route::delete('/{id}', [TicketCategoryController::class, 'destroy']);
+    Route::patch('/{id}/toggle-active', [TicketCategoryController::class, 'toggleActive']);
 });
