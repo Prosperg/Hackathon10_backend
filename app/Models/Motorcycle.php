@@ -51,16 +51,23 @@ class Motorcycle extends Model
 
     public function generateTicket()
     {
-        // Générer un code unique
-        $this->ticket_code = strtoupper(Str::random(8));
+        // Générer un code unique de 5 caractères
+        $uniqueCode = strtoupper(Str::random(5));
+        
+        // Combiner avec la signature de la catégorie
+        $this->ticket_code = $this->ticketCategory->signature . '-' . $uniqueCode;
         
         // Générer le QR code
         $qrData = [
             'ticket_code' => $this->ticket_code,
             'motorcycle_number' => $this->motorcycle_number,
             'entry_time' => $this->entry_time->format('Y-m-d H:i:s'),
-            'category' => $this->ticketCategory->name,
-            'price' => $this->ticketCategory->price
+            'category' => [
+                'name' => $this->ticketCategory->name,
+                'signature' => $this->ticketCategory->signature,
+                'price' => $this->ticketCategory->price,
+                'duration_hours' => $this->ticketCategory->duration_hours
+            ]
         ];
 
         // Générer le QR code en SVG
@@ -77,8 +84,10 @@ class Motorcycle extends Model
 
         return [
             'ticket_code' => $this->ticket_code,
+            'category_signature' => $this->ticketCategory->signature,
+            'unique_code' => $uniqueCode,
             'qr_code_url' => Storage::url($qrPath),
-            'qr_code_content' => $qrCode, // On renvoie aussi le contenu SVG directement
+            'qr_code_content' => $qrCode,
             'price' => $this->ticketCategory->price,
             'valid_until' => $this->entry_time->addHours($this->ticketCategory->duration_hours)
         ];

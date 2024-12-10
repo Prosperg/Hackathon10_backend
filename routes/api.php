@@ -51,7 +51,7 @@ Route::group([
 Route::group([
     'middleware' => 'api',
     'prfix'=>''
-],function($router){
+],function ($router) {
     // Liste et enregistrement des motos
     Route::get('motorcycles', [MotorcycleController::class, 'index']);
     Route::post('motorcycles', [MotorcycleController::class, 'store']);
