@@ -59,7 +59,6 @@ Route::prefix('ticket-categories')->group(function () {
     Route::delete('/{id}', [TicketCategoryController::class, 'destroy']);
     Route::patch('/{id}/toggle-active', [TicketCategoryController::class, 'toggleActive']);
 });
-
 // Route de test pour SMS
 Route::post('/test-sms', function(Request $request) {
     $smsService = app(App\Services\SmsService::class);

@@ -70,6 +70,7 @@ class SmsService
         // Supprimer tous les caractères non numériques
         $number = preg_replace('/[^0-9]/', '', $number);
 
+        // Si le numéro ne commence pas par +, ajouter le code pays (+237 pour le Cameroun)
         if (!str_starts_with($number, '+')) {
             if (str_starts_with($number, '229')) {
                 $number = '+' . $number;

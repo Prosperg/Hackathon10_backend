@@ -5,9 +5,11 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Motorcycle;
 use App\Models\MotorcycleHistory;
+use App\Models\TicketCategory;
 use App\Services\SmsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Carbon\Carbon;
 
@@ -22,56 +24,102 @@ class MotorcycleController extends Controller
 
     public function store(Request $request)
     {
+        // Validation des données
         $request->validate([
-            'phone_number' => 'required|string',
-            'motorcycle_number' => 'required|string',
-            'photo_path' => 'required|string',
-            'ticket_category_id' => 'required|exists:ticket_categories,id'
+            'phone_number' => 'required|string|max:20',
+            'motorcycle_number' => 'required|string|max:50',
+            'photo' => 'required|image|max:2048', // 2MB max
+            'ticket_category_id' => 'required|exists:ticket_categories,id',
+            'notes' => 'nullable|string'
         ]);
 
-        // Créer la moto
-        $motorcycle = Motorcycle::create([
-            'phone_number' => $request->phone_number,
-            'motorcycle_number' => $request->motorcycle_number,
-            'photo_path' => $request->photo_path,
-            'user_id' => Auth::id(),
-            'ticket_category_id' => $request->ticket_category_id,
-            'entry_time' => now(),
-            'status' => 'in_custody'
-        ]);
+        // Vérifier si la catégorie est active
+        $category = TicketCategory::findOrFail($request->ticket_category_id);
+        if (!$category->is_active) {
+            return response()->json(['error' => 'Cette catégorie de ticket n\'est pas disponible'], 400);
+        }
 
-        // Générer le code du ticket
-        $motorcycle->generateTicketCode();
+        try {
+            // Enregistrer la photo
+            $photoPath = $request->file('photo')->store('motorcycles', 'public');
 
-        // Générer le QR code
-        $motorcycle->generateQRCode();
+            // Créer la moto
+            $motorcycle = Motorcycle::create([
+                'phone_number' => $request->phone_number,
+                'motorcycle_number' => $request->motorcycle_number,
+                'photo_path' => $photoPath,
+                'ticket_category_id' => $request->ticket_category_id,
+                'user_id' => Auth::id() ?? 1, // Utiliser 1 comme ID par défaut si non authentifié
+                'entry_time' => now(),
+                'status' => 'in_custody',
+                'notes' => $request->notes
+            ]);
 
-        // Créer l'historique
-        MotorcycleHistory::create([
-            'motorcycle_id' => $motorcycle->id,
-            'user_id' => Auth::id(),
-            'action' => 'check_in',
-            'action_time' => now()
-        ]);
+            // Générer le code du ticket
+            $motorcycle->generateTicketCode();
 
-        // Envoyer le SMS de confirmation
-        $ticketData = [
-            'ticket_code' => $motorcycle->ticket_code,
-            'category' => $motorcycle->category->name,
-            'price' => $motorcycle->category->price,
-            'duration' => $motorcycle->category->duration_hours,
-            'plate_number' => $motorcycle->motorcycle_number
-        ];
-        
-        $this->smsService->sendTicketConfirmation(
-            $motorcycle->phone_number,
-            $ticketData
-        );
+            // Générer le QR code
+            $motorcycle->generateQRCode();
 
-        return response()->json([
-            'message' => 'Moto enregistrée avec succès',
-            'motorcycle' => $motorcycle
-        ], 201);
+            // Créer l'historique
+            MotorcycleHistory::create([
+                'motorcycle_id' => $motorcycle->id,
+                'user_id' => Auth::id() ?? 1,
+                'action' => 'check_in',
+                'action_time' => now(),
+                'notes' => 'Enregistrement initial'
+            ]);
+
+            // Préparer les données pour le SMS
+            $ticketData = [
+                'ticket_code' => $motorcycle->ticket_code,
+                'category' => $category->name,
+                'price' => $category->price,
+                'duration' => $category->duration_hours,
+                'plate_number' => $motorcycle->motorcycle_number
+            ];
+
+            // Envoyer le SMS de confirmation
+            $this->smsService->sendTicketConfirmation(
+                $motorcycle->phone_number,
+                $ticketData
+            );
+
+            return response()->json([
+                'message' => 'Moto enregistrée avec succès',
+                'motorcycle' => $motorcycle,
+                'photo_url' => Storage::url($photoPath)
+            ], 201);
+
+        } catch (\Exception $e) {
+            // En cas d'erreur, supprimer la photo si elle a été uploadée
+            if (isset($photoPath) && Storage::exists($photoPath)) {
+                Storage::delete($photoPath);
+            }
+
+            return response()->json([
+                'message' => 'Erreur lors de l\'enregistrement de la moto',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function index()
+    {
+        $motorcycles = Motorcycle::with(['user', 'category'])
+            ->where('status', 'in_custody')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($motorcycles);
+    }
+
+    public function show($id)
+    {
+        $motorcycle = Motorcycle::with(['user', 'category', 'history'])
+            ->findOrFail($id);
+
+        return response()->json($motorcycle);
     }
 
     public function markAsPaid($id)
@@ -90,7 +138,7 @@ class MotorcycleController extends Controller
         // Créer l'historique
         MotorcycleHistory::create([
             'motorcycle_id' => $motorcycle->id,
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? 1,
             'action' => 'payment',
             'action_time' => now()
         ]);
@@ -136,7 +184,7 @@ class MotorcycleController extends Controller
         // Créer l'historique
         MotorcycleHistory::create([
             'motorcycle_id' => $motorcycle->id,
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? 1,
             'action' => 'return',
             'action_time' => now()
         ]);
@@ -147,76 +195,61 @@ class MotorcycleController extends Controller
         ]);
     }
 
-    public function index()
-    {
-        $motorcycles = Motorcycle::with(['user', 'ticketCategory'])
-            ->inCustody()
-            ->today()
-            ->get()
-            ->map(function ($motorcycle) {
-                $motorcycle->qr_code_content = $motorcycle->getQRCodeContent();
-                return $motorcycle;
-            });
-
-        return response()->json($motorcycles);
-    }
-
-    public function show($id)
-    {
-        $motorcycle = Motorcycle::with(['user', 'ticketCategory', 'history'])->findOrFail($id);
-        $motorcycle->qr_code_content = $motorcycle->getQRCodeContent();
-        return response()->json($motorcycle);
-    }
-
     public function search(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'search' => 'required|string'
-        ]);
+        $query = Motorcycle::with(['user', 'category']);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+        if ($request->has('ticket_code')) {
+            $query->where('ticket_code', 'like', '%' . $request->ticket_code . '%');
         }
 
-        $search = $request->search;
+        if ($request->has('motorcycle_number')) {
+            $query->where('motorcycle_number', 'like', '%' . $request->motorcycle_number . '%');
+        }
 
-        $motorcycles = Motorcycle::where(function($query) use ($search) {
-            $query->where('phone_number', 'like', "%{$search}%")
-                  ->orWhere('motorcycle_number', 'like', "%{$search}%")
-                  ->orWhere('ticket_code', 'like', "%{$search}%");
-        })
-        ->with(['ticketCategory'])
-        ->inCustody()
-        ->get()
-        ->map(function ($motorcycle) {
-            $motorcycle->qr_code_content = $motorcycle->getQRCodeContent();
-            return $motorcycle;
-        });
+        if ($request->has('phone_number')) {
+            $query->where('phone_number', 'like', '%' . $request->phone_number . '%');
+        }
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('date')) {
+            $query->whereDate('created_at', $request->date);
+        }
+
+        $motorcycles = $query->orderBy('created_at', 'desc')->get();
 
         return response()->json($motorcycles);
     }
 
     public function getCategories()
     {
-        $categories = TicketCategory::where('is_active', true)->get();
+        $categories = TicketCategory::where('is_active', true)
+            ->orderBy('duration_hours')
+            ->get();
+
         return response()->json($categories);
     }
 
     public function verifyTicket($code)
     {
-        $motorcycle = Motorcycle::where('ticket_code', $code)
-            ->with(['ticketCategory'])
-            ->firstOrFail();
+        $motorcycle = Motorcycle::with(['category'])
+            ->where('ticket_code', $code)
+            ->first();
 
-        $validUntil = $motorcycle->entry_time->addHours($motorcycle->ticketCategory->duration_hours);
-        $isValid = now()->lt($validUntil) && $motorcycle->payment_status;
+        if (!$motorcycle) {
+            return response()->json([
+                'message' => 'Ticket non trouvé'
+            ], 404);
+        }
 
         return response()->json([
+            'message' => 'Ticket vérifié avec succès',
             'motorcycle' => $motorcycle,
-            'is_valid' => $isValid,
-            'valid_until' => $validUntil,
-            'status' => $motorcycle->status,
-            'qr_code_content' => $motorcycle->getQRCodeContent()
+            'is_expired' => $motorcycle->isExpired(),
+            'remaining_time' => $motorcycle->getRemainingTime()
         ]);
     }
 }
