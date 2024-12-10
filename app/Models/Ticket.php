@@ -13,32 +13,17 @@ class Ticket extends Model
     use HasFactory;
 
     protected $fillable = [
-        'event_id',
-        'user_id',
-        'ticket_category_id',
-        'price',
-        'status',
-        'seat_number',
-        'qr_code',
-        'unique_identifier',
-        'purchase_date',
-        'check_in_time',
-        'special_requests',
-        'is_transferable',
-        'transfer_deadline',
-        'ar_experience_enabled',
-        'social_sharing_done',
-        'group_booking_id'
+        "createdBy","unique_code","phone","user","landload_name","phone","plate","statut","photo"
     ];
 
-    protected $casts = [
-        'purchase_date' => 'datetime',
-        'check_in_time' => 'datetime',
-        'transfer_deadline' => 'datetime',
-        'ar_experience_enabled' => 'boolean',
-        'social_sharing_done' => 'boolean',
-        'special_requests' => 'json'
-    ];
+    // protected $casts = [
+    //     'purchase_date' => 'datetime',
+    //     'check_in_time' => 'datetime',
+    //     'transfer_deadline' => 'datetime',
+    //     'ar_experience_enabled' => 'boolean',
+    //     'social_sharing_done' => 'boolean',
+    //     'special_requests' => 'json'
+    // ];
 
     public function event(): BelongsTo
     {
