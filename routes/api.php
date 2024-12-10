@@ -2,9 +2,8 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\Ressources\ProductController;
-use App\Http\Controllers\Ressources\CategorieController;
 use App\Http\Controllers\API\TicketCategoryController;
+use App\Http\Controllers\API\MotorcycleController;
 
 /*
 |--------------------------------------------------------------------------
@@ -28,7 +27,11 @@ Route::group([
     Route::patch('/update-user-profile/{id}', [AuthController::class, 'updateUserProfile']);    
 });
 
-//get different resource
+// Routes publiques
+Route::get('ticket-categories', [MotorcycleController::class, 'getCategories']);
+Route::get('verify-ticket/{code}', [MotorcycleController::class, 'verifyTicket']);
+
+// Routes protégées pour la gestion des motos
 Route::group([
     'middleware'=>'api',
     'prefix'=>'hackathon'
@@ -43,4 +46,21 @@ Route::group([
     Route::get('/', [TicketCategoryController::class,'getTicketCategory']);
     Route::post('/store', [TicketCategoryController::class,'store']);
     Route::patch('/update', [TicketCategoryController::class,'update']);
+});
+
+Route::group([
+    'middleware' => 'api',
+    'prfix'=>''
+],function($router){
+    // Liste et enregistrement des motos
+    Route::get('motorcycles', [MotorcycleController::class, 'index']);
+    Route::post('motorcycles', [MotorcycleController::class, 'store']);
+    Route::get('motorcycles/{id}', [MotorcycleController::class, 'show']);
+    
+    // Gestion des paiements et restitutions
+    Route::post('motorcycles/{id}/pay', [MotorcycleController::class, 'markAsPaid']);
+    Route::post('motorcycles/{id}/return', [MotorcycleController::class, 'return']);
+    
+    // Recherche
+    Route::post('motorcycles/search', [MotorcycleController::class, 'search']);
 });

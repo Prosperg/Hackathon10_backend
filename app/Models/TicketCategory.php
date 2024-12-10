@@ -9,6 +9,6 @@ use Illuminate\Support\Str;
 class TicketCategory extends Model
 {
     use HasFactory;
-    protected $fillable = ["name","price","signing","description"];
+    protected $fillable = ["name","price","signature","description"];
 
 }

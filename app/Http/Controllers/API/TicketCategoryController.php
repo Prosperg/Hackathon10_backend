@@ -27,14 +27,14 @@ class TicketCategoryController extends Controller
                 "name" => "required|min:3",
                 "price" => "required|integer",
                 "description" => "nullable",
-                "signing"=>Str::random(6)
+                "signature"=>Str::random(6)
             ]);
             
             TicketCategory::create([
                 "name" => $request->name,
                 "price" => $request->price,
                 "description" => $request->description,
-                "signing"=>Str::random(6)
+                "signature"=>Str::random(6)
             ]);
             return response()->json(["message"=>"success"],201);
         } catch (\Throwable $th) {
